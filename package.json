@@ -1,0 +1,59 @@
+{
+	"name": "spd-tool-bun",
+	"version": "1.0.0",
+	"description": "Typescript implementation of SPD Flash Tool for PAC flashing and extraction",
+	"keywords": [
+		"unisoc",
+		"spreadtrum",
+		"flash",
+		"pac",
+		"fdl",
+		"android",
+		"tool",
+		"bun"
+	],
+	"homepage": "https://github.com/enigma550/spd-tool-bun#readme",
+	"bugs": {
+		"url": "https://github.com/enigma550/spd-tool-bun/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/enigma550/spd-tool-bun.git"
+	},
+	"license": "GPL-3.0-only",
+	"author": "Enigma550",
+	"type": "module",
+	"main": "src/lib.ts",
+	"types": "src/lib.ts",
+	"bin": {
+		"spd-tool": "./index.ts"
+	},
+	"files": [
+		"src",
+		"dist",
+		"index.ts",
+		"README.md",
+		"package.json"
+	],
+	"engines": {
+		"node": ">=18.0.0",
+		"bun": ">=1.0.0"
+	},
+	"scripts": {
+		"start": "bun index.ts",
+		"check": "bun run lint && bun run tsc --noEmit",
+		"extract": "bun run index.ts",
+		"format": "biome format --write .",
+		"lint": "biome check .",
+		"build": "bun build ./index.ts --outfile ./dist/index.js --target bun --minify",
+		"prepare": "bun run build"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.4",
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5.9.3"
+	},
+	"dependencies": {}
+}
