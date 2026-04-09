@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { PortScanner } from "../io/PortScanner";
 import { SerialPort } from "../io/SerialPort";
 import { SparseParser } from "../parsers/SparseParser";
@@ -261,6 +262,124 @@ export class FlashEngine extends EventEmitter {
 		return true;
 	}
 
+	async flashFileToPartition(
+		partitionName: string,
+		imagePath: string,
+	): Promise<boolean> {
+		const stats = statSync(imagePath);
+		const totalSize = BigInt(stats.size);
+		const fd = openSync(imagePath, "r");
+
+		try {
+			const headerBuf = Buffer.alloc(28);
+			readSync(fd, headerBuf, 0, headerBuf.length, 0);
+
+			const isSparse = SparseParser.isSparse(headerBuf);
+			const partitionSize = isSparse
+				? SparseParser.getUncompressedSize(headerBuf)
+				: totalSize;
+			const is64Bit = partitionSize > 0xffffffffn;
+
+			this.emit(
+				"status",
+				`🔥 Flashing override [${partitionName}] ${imagePath} (${(
+					Number(partitionSize) / 1024 / 1024
+				).toFixed(0)} MB)${isSparse ? " [Sparse]" : ""}...`,
+			);
+
+			if (
+				(await this.sendCommand(
+					BslCommand.START_DATA,
+					0,
+					partitionSize,
+					Buffer.from(`${partitionName}\0`, "ascii"),
+					is64Bit,
+				)) === null
+			)
+				return false;
+
+			const chunkSize = 65536;
+
+			if (isSparse) {
+				const generator = SparseParser.decompressReader((off, sz, buf) => {
+					readSync(fd, buf, 0, sz, off);
+				}, chunkSize);
+				let processed = 0n;
+				for (const chunk of generator) {
+					if (
+						(await this.sendCommand(
+							BslCommand.MID_DATA,
+							processed,
+							chunk.length,
+							this.dryRun ? undefined : chunk,
+							is64Bit,
+						)) === null
+					)
+						return false;
+
+					processed += BigInt(chunk.length);
+					if (partitionSize > 1024n * 1024n) {
+						const percent = (
+							(Number(processed) / Number(partitionSize)) *
+							100
+						).toFixed(1);
+						this.emit("progress", { percent, entry: partitionName });
+					}
+				}
+			} else {
+				const chunkBuffer = Buffer.alloc(chunkSize);
+				for (
+					let offset = 0n;
+					offset < partitionSize;
+					offset += BigInt(chunkSize)
+				) {
+					const size =
+						partitionSize - offset < BigInt(chunkSize)
+							? Number(partitionSize - offset)
+							: chunkSize;
+
+					readSync(fd, chunkBuffer, 0, size, Number(offset));
+					const chunk =
+						size === chunkSize ? chunkBuffer : chunkBuffer.subarray(0, size);
+
+					if (
+						(await this.sendCommand(
+							BslCommand.MID_DATA,
+							offset,
+							size,
+							this.dryRun ? undefined : chunk,
+							is64Bit,
+						)) === null
+					)
+						return false;
+
+					if (partitionSize > 1024n * 1024n) {
+						const percent = (
+							((Number(offset) + size) / Number(partitionSize)) *
+							100
+						).toFixed(1);
+						this.emit("progress", { percent, entry: partitionName });
+					}
+				}
+			}
+
+			if (
+				(await this.sendCommand(
+					BslCommand.END_DATA,
+					0,
+					0,
+					undefined,
+					is64Bit,
+				)) === null
+			)
+				return false;
+
+			return true;
+		} finally {
+			closeSync(fd);
+		}
+	}
+
 	async readPartition(name: string, size: number): Promise<Buffer | null> {
 		if (this.dryRun) {
 			console.log(`[DRY-RUN] Simulating read from partition ${name}...`);
@@ -447,6 +566,27 @@ export class FlashEngine extends EventEmitter {
 		console.log("🔓 Attempting bootloader unlock...");
 		const resp = await this.sendCommand(BslCommand.UNLOCK);
 		return resp !== null;
+	}
+
+	async reboot(): Promise<boolean> {
+		if (this.dryRun) {
+			console.log("[DRY-RUN] Simulating device reboot...");
+			return true;
+		}
+
+		if (!this.isFdl2Mode) {
+			this.emit("error", "❌ Reboot requires an active FDL2 session.");
+			return false;
+		}
+
+		this.emit("status", "🔄 Rebooting device...");
+		const resp = await this.sendCommand(BslCommand.NORMAL_RESET);
+		if (resp === null) {
+			return false;
+		}
+
+		this.emit("status", "✅ Reboot command sent.");
+		return true;
 	}
 
 	async readEfuse(block = 0): Promise<Buffer | null> {

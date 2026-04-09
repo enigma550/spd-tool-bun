@@ -8,6 +8,7 @@ import { FactoryResetCommand } from "./src/cli/flash/FactoryResetCommand";
 import { FlashCommand } from "./src/cli/flash/FlashCommand";
 import { NVBackupCommand } from "./src/cli/flash/NVBackupCommand";
 import { ReadPartitionCommand } from "./src/cli/flash/ReadPartitionCommand";
+import { RebootCommand } from "./src/cli/flash/RebootCommand";
 import { BackupNvCommand } from "./src/cli/service/BackupNvCommand";
 import { FrpBypassCommand } from "./src/cli/service/FrpBypassCommand";
 import { UnlockBlCommand } from "./src/cli/service/UnlockBlCommand";
@@ -29,6 +30,7 @@ async function main() {
 	registry.register(new ErasePartitionCommand());
 	registry.register(new FactoryResetCommand());
 	registry.register(new NVBackupCommand());
+	registry.register(new RebootCommand());
 
 	const args = Bun.argv.slice(2);
 	if (args.length === 0) {

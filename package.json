@@ -1,6 +1,6 @@
 {
 	"name": "spd-tool-bun",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Typescript implementation of SPD Flash Tool for PAC flashing and extraction",
 	"keywords": [
 		"unisoc",
